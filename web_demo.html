@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 ESP32 Health Monitor Dashboard - Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            font-weight: 300;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .card:hover::before {
+            left: 100%;
+        }
+        
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+        
+        .card-icon {
+            font-size: 2em;
+            margin-right: 15px;
+            padding: 10px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .system-icon { background: linear-gradient(45deg, #4CAF50, #45a049); }
+        .room-icon { background: linear-gradient(45deg, #FF9800, #f57c00); }
+        .patient-icon { background: linear-gradient(45deg, #2196F3, #1976d2); }
+        .heart-icon { background: linear-gradient(45deg, #f44336, #d32f2f); }
+        .air-icon { background: linear-gradient(45deg, #9C27B0, #7B1FA2); }
+        .nurse-icon { background: linear-gradient(45deg, #00BCD4, #0097A7); }
+        .control-icon { background: linear-gradient(45deg, #607D8B, #455A64); }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .metric:hover {
+            background: rgba(0,0,0,0.1);
+            transform: scale(1.02);
+        }
+        
+        .metric-label {
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .metric-value {
+            font-weight: 700;
+            font-size: 1.1em;
+            padding: 5px 12px;
+            border-radius: 20px;
+            color: white;
+        }
+        
+        .status-normal { background: linear-gradient(45deg, #4CAF50, #45a049); }
+        .status-warning { background: linear-gradient(45deg, #FF9800, #f57c00); }
+        .status-critical { 
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+            animation: blink 1s infinite;
+        }
+        .status-offline { background: linear-gradient(45deg, #9E9E9E, #757575); }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.5; }
+        }
+        
+        .led-control {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .led-button {
+            display: inline-block;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .led-on {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .led-off {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+            color: white;
+            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4);
+        }
+        
+        .led-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        
+        .nurse-alert {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .nurse-button {
+            display: inline-block;
+            padding: 20px 40px;
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.2em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.4);
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .nurse-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.6);
+        }
+        
+        .nurse-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .nurse-button:hover::before {
+            left: 100%;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        .time-display {
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: 300;
+            color: #667eea;
+            margin: 20px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9em;
+        }
+        
+        .realtime-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #4CAF50;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse-dot 2s infinite;
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        
+        .demo-note {
+            background: rgba(255, 193, 7, 0.9);
+            color: #856404;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 10px;
+            }
+            .header h1 {
+                font-size: 2em;
+            }
+            .card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-note">
+        📱 DEMO MODE: This is a preview of the ESP32 web interface. Connect to your ESP32's IP address to see real sensor data!
+    </div>
+    
+    <div class="header">
+        <h1>🏥 Smart Health Monitor</h1>
+        <p class="subtitle">Real-time Patient Care Dashboard</p>
+        <div id="current-time" class="time-display"></div>
+    </div>
+
+    <div class='container'>
+        <!-- System Status Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon system-icon'>⚙️</div>
+                <div>System Status<span class='realtime-indicator'></span></div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>WiFi Connection</span>
+                <span class='metric-value status-normal'>Connected</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>IP Address</span>
+                <span class='metric-value status-normal'>192.168.1.100</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>System Uptime</span>
+                <span class='metric-value status-normal'>2d 14h 32m</span>
+            </div>
+
+            <div class='metric'>
+                <span class='metric-label'>Signal Strength</span>
+                <span class='metric-value status-normal'>Excellent (-45 dBm)</span>
+            </div>
+        </div>
+
+        <!-- Room Environment Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon room-icon'>🌡️</div>
+                <div>Room Environment</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>🌡️ Temperature</span>
+                <span class='metric-value status-normal'>22.5°C</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>💧 Humidity</span>
+                <span class='metric-value status-normal'>45.2%</span>
+            </div>
+            
+            <div class='progress-bar'>
+                <div class='progress-fill' style='width: 45%'></div>
+            </div>
+        </div>
+
+        <!-- Patient Monitoring Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon patient-icon'>👤</div>
+                <div>Patient Monitoring</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>🌡️ Body Temperature</span>
+                <span class='metric-value status-normal'>36.8°C</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>💧 Skin Humidity</span>
+                <span class='metric-value status-normal'>62.1%</span>
+            </div>
+        </div>
+
+        <!-- Heart Rate Monitor Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon heart-icon'>❤️</div>
+                <div>Heart Rate Monitor</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>❤️ Heart Rate</span>
+                <span class='metric-value status-warning'>125 BPM</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>📊 Status</span>
+                <span class='metric-value status-critical'>🚨 CRITICAL</span>
+            </div>
+        </div>
+
+        <!-- Air Quality Monitor Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon air-icon'>🌬️</div>
+                <div>Air Quality Monitor</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>🌬️ Gas Level</span>
+                <span class='metric-value status-normal'>1250</span>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>📊 Air Quality</span>
+                <span class='metric-value status-normal'>✅ Safe</span>
+            </div>
+            
+            <div class='progress-bar'>
+                <div class='progress-fill' style='width: 30%'></div>
+            </div>
+        </div>
+
+        <!-- Contact Nurse Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon nurse-icon'>👩‍⚕️</div>
+                <div>Emergency Contact</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>🏥 Nurse Station</span>
+                <span class='metric-value status-normal'>Available</span>
+            </div>
+            
+            <div class='nurse-alert'>
+                <button class='nurse-button' onclick='contactNurse()'>🚨 CONTACT NURSE</button>
+            </div>
+        </div>
+
+        <!-- LED Control Card -->
+        <div class='card'>
+            <div class='card-header'>
+                <div class='card-icon control-icon'>💡</div>
+                <div>System Control</div>
+            </div>
+            
+            <div class='metric'>
+                <span class='metric-label'>💡 LED Status</span>
+                <span class='metric-value status-normal'>ON</span>
+            </div>
+            
+            <div class='led-control'>
+                <button class='led-button led-off' onclick='toggleLed()'>💡 Turn OFF</button>
+            </div>
+        </div>
+    </div>
+
+    <div class='footer'>
+        <p>🔒 Secure Connection | 🔄 Auto-refresh: 10s | 💻 ESP32 Health Monitor v2.0</p>
+        <p>⚡ Powered by ESP32 | 🌐 Real-time Patient Care System</p>
+    </div>
+
+    <script>
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const dateString = now.toLocaleDateString();
+            document.getElementById('current-time').innerHTML = `${dateString} - ${timeString}`;
+        }
+        
+        setInterval(updateTime, 1000);
+        
+        function contactNurse() {
+            if(confirm('🚨 Are you sure you want to contact the nurse?\n\nThis will send an emergency alert to the nursing station.')) {
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '📞 CONTACTING...';
+                button.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+                
+                setTimeout(() => {
+                    button.innerHTML = '✅ NURSE CONTACTED (DEMO)';
+                    alert('📞 Demo: In real system, nurse would be alerted via serial monitor!');
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a52)';
+                    }, 3000);
+                }, 1000);
+            }
+        }
+        
+        function toggleLed() {
+            const button = event.target;
+            const isOn = button.innerHTML.includes('OFF');
+            
+            if (isOn) {
+                button.innerHTML = '💡 Turn ON';
+                button.className = 'led-button led-on';
+                document.querySelector('.metric-value').innerHTML = 'OFF';
+                document.querySelector('.metric-value').className = 'metric-value status-offline';
+            } else {
+                button.innerHTML = '💡 Turn OFF';
+                button.className = 'led-button led-off';
+                document.querySelector('.metric-value').innerHTML = 'ON';
+                document.querySelector('.metric-value').className = 'metric-value status-normal';
+            }
+        }
+        
+        window.onload = function() {
+            updateTime();
+            // Add loading animation
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    card.style.transition = 'all 0.5s ease';
+                    setTimeout(() => {
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 50);
+                }, index * 100);
+            });
+        }
+
+        // Add sparkle animation to critical alerts
+        document.addEventListener('DOMContentLoaded', function() {
+            const criticalElements = document.querySelectorAll('.status-critical');
+            criticalElements.forEach(element => {
+                element.style.position = 'relative';
+                element.style.overflow = 'hidden';
+                
+                setInterval(() => {
+                    const sparkle = document.createElement('div');
+                    sparkle.style.position = 'absolute';
+                    sparkle.style.top = Math.random() * 100 + '%';
+                    sparkle.style.left = Math.random() * 100 + '%';
+                    sparkle.style.width = '4px';
+                    sparkle.style.height = '4px';
+                    sparkle.style.background = 'white';
+                    sparkle.style.borderRadius = '50%';
+                    sparkle.style.animation = 'sparkle 1s linear';
+                    sparkle.style.pointerEvents = 'none';
+                    
+                    element.appendChild(sparkle);
+                    
+                    setTimeout(() => {
+                        sparkle.remove();
+                    }, 1000);
+                }, 500);
+            });
+        });
+
+        // Add CSS for sparkle animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes sparkle {
+                0% { opacity: 0; transform: scale(0); }
+                50% { opacity: 1; transform: scale(1); }
+                100% { opacity: 0; transform: scale(0); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
